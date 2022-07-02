@@ -1,0 +1,14 @@
+.kycInput{
+  // width: 100%;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid #9E9E9E;
+  outline-color: hsla(269, 62%, 38%, 0.7);
+  display: block;
+}
+.kycInput.kycInputError{
+  outline-color: red;
+  border-color: red;
+}
