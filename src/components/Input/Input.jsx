@@ -27,55 +27,40 @@ const _checkValidity = (value, _validatorFunction) => {
 export const InputPage = ({type, value, placeholder, disabled}) =>{
     console.log('INput Page rerendered');
     const [time, setTime] = useState(Date.now());
-    const [formData, isErrorPresent, onBlurs] = useForm([
+    const {formData, register, isFormValid, validateForm} = useForm([
         {control: 'name', validators: [Validators.required(), Validators.minLength(4)] },
         {control: 'address', validators: [Validators.required()] }    
     ]);
-    const inputChange = (e, key) =>{
-        // formData.current[key] = e.target.value;
+   
+    const submitForm = () => {
+        validateForm();
     }
     useEffect(()=>{
-        console.log("Form Error present:",isErrorPresent());
-    }, [formData.name, formData.address, isErrorPresent]);
+        console.log("Form Valid:",isFormValid());
+    }, [formData.name, formData.address, isFormValid]);
+    
     return (
         <div>
             <p>Time: {time} </p>
-            <FormInput label='Names'  formControl={formData.name} onChange={(e)=>inputChange(e, 'name')}/>
-            <FormInput label='Address' formControl={formData.address} onChange={(e)=>inputChange(e, 'address')}/>
+            <FormInput label='Names' {...register('name')} showError={formData.name?.errors}/>
+            <FormInput label='Address' {...register('address')} showError={formData.address?.errors}/>
+            <button onClick={submitForm}>Validate</button>
             <button onClick={()=> console.log(formData)}>Form Data</button>
             <button onClick={()=> setTime(Date.now())}>Change State</button>
         </div>
     );
 }
 
-const FormInput = ({ formControl, label, required, description, onChange, type, value, placeholder, disabled }) =>{
-    const [showError, setShowError] = useState(false);
-    
-    const inputChange = (e) =>{
-        console.log('formControl:',formControl);
-        if(formControl){
-            const errors = formControl.setValue(e.target.value);
-            if(formControl.touched){
-                setShowError(errors);
-            }
-        }
-        onChange(e);
-    }
-    const onInputBlur = (e) =>{
-        formControl.setTouched();
-        if(formControl){
-            setShowError(formControl.validate(e.target.value));
-        }
-    }
+const FormInput = ({ label, showError, required, description, onChange, onBlur, type, value, placeholder, disabled }) =>{
 
     return (
         <FieldWrapper label={label} showError={showError} required={required} description={description}>
             <input 
                 type={type} 
-                value={(formControl && formControl.value) || ''} 
+                value={value || ''} 
                 placeholder={placeholder} 
-                onChange={inputChange} 
-                onBlur={onInputBlur}
+                onChange={onChange} 
+                onBlur={onBlur}
                 className={`${styles.kycInput} ${showError ? styles.kycInputError:''}`} 
                 // maxLength={maxLength} 
                 disabled={disabled}
@@ -85,10 +70,8 @@ const FormInput = ({ formControl, label, required, description, onChange, type, 
 }
 
 const useForm = (formFields) => {
-    console.log('Use form called');
     const [formData, setFormData] = useState({});
     useEffect(()=>{
-        console.log('Use form useEffect called');
         const formObject = {};
         formFields.forEach(field => {
             if(field['control']){
@@ -96,13 +79,14 @@ const useForm = (formFields) => {
                     value: undefined,
                     valid: false,
                     touched: false,
-                    // dirty: false,
                     errors: null,
                     validators: field.validators,
-                    setValue(val){
-                        console.log('this.value:', this.value);
-                        const errors = this.validate(val);
-                        this.valid = !errors; //// direct assign
+                    validate(){
+                        return _checkErrors(field, this.value);
+                    },
+                    onChange(event){
+                        const {target} = event;
+                        const errors = _checkErrors(field, target.value);
                         setFormData((prev)=>{
                             const prevClone = Object.assign({}, prev);
                             const control = prevClone[field['control']];
@@ -110,32 +94,53 @@ const useForm = (formFields) => {
                                 control.errors = errors;
                             } 
                             control.valid = !errors;
-                            control.value = val;
+                            control.value = target.value;
                             return prevClone;
                         });
-                        return errors;
                     },
-                    setTouched(){
+                    onBlur(event){
+                        const {target} = event;
+                        const errors = _checkErrors(field, target.value);
                         setFormData((prev)=>{
                             const prevClone = Object.assign({}, prev);
                             const control = prevClone[field['control']];
                             control.touched = true;
+                            control.errors = errors;
+                            control.valid = !errors;
+                            control.value = target.value;
                             return prevClone;
                         });
-                    },
-                    validate(val){
-                        const errors = _checkErrors(field, val);
-                        // const valid = errors ? false : true;
-                        return errors;
                     },
                 }
             }
         });
         setFormData(formObject);
     }, []);
-    // 
-    const isErrorPresent = useCallback(()=>{
-        return Object.keys(formData).some( key=> !formData[key].valid);
+
+    const isFormValid = useCallback(()=>{
+        return !Object.keys(formData).some( key=> !formData[key].valid);
     }, [formData]);
-    return [formData, isErrorPresent];
+
+    const validateForm = () => {
+        const formDataCopy = Object.assign({}, formData);
+        Object.keys(formDataCopy).forEach(key => {
+            const field = formDataCopy[key];
+            field.errors = field.validate();
+            field.touched = true;
+        });
+        setFormData(formDataCopy);
+    }
+
+    const register = (control)=>{
+        return !formData[control]? {
+            value: '',
+            onChange: ()=>{},
+            onBlur: ()=>{}
+        } : {
+            value: formData[control].value,
+            onChange: formData[control].onChange,
+            onBlur: formData[control].onBlur
+        }
+    }
+    return {formData, register, isFormValid, validateForm};
 }
